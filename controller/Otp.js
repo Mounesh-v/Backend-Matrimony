@@ -202,6 +202,29 @@ export const adminSendOtp = async (req, res) => {
   }
 };
 
+export const testEmail = async (req, res) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: process.env.SMTP_EMAIL,
+      to: process.env.SMTP_EMAIL,
+      subject: "SMTP Test",
+      text: "SMTP connection working!",
+    });
+
+    res.send("Email Sent!");
+  } catch (err) {
+    res.send(err.message);
+  }
+};
+
 export const adminVerifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;

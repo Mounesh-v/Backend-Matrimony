@@ -8,6 +8,8 @@ import path from "node:path";
 import groomRoutes from "./routes/groomRoutes.js";
 import brideRoutes from "./routes/brideRoutes.js";
 import Router from "./routes/otpRoute.js";
+import nodemailer from "nodemailer";
+
 
 const app = express();
 dotenv.config();
