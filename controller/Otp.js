@@ -148,21 +148,24 @@ export const adminSendOtp = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validate admin credentials
+    // 1. Validate admin credentials FIRST
     if (
       email !== process.env.ADMIN_EMAIL ||
       password !== process.env.ADMIN_PASSWORD
     ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid admin credentials" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid admin credentials",
+      });
     }
 
+    // 2. Generate OTP
     const otp = otpGenerator.generate(6, {
       upperCase: false,
       specialChars: false,
     });
 
+    // 3. Setup Gmail SMTP
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -171,28 +174,31 @@ export const adminSendOtp = async (req, res) => {
       },
     });
 
+    // 4. Send OTP Email
     await transporter.sendMail({
       from: process.env.SMTP_EMAIL,
-      to: email,
-      subject: "Your Admin Login OTP – Thirukkalyanam Matrimony",
-      html: `
-        <h2>Your Admin Login OTP</h2>
-        <p>Use this OTP to login:</p>
-        <h1>${otp}</h1>
-        <p>Valid for 2 minutes.</p>
-      `,
+      to: process.env.ADMIN_EMAIL, // ALWAYS send to admin email
+      subject: "Your Admin Login OTP",
+      html: `<h1>${otp}</h1><p>Valid for 2 minutes.</p>`,
     });
 
+    // 5. Save OTP
     await Otp.create({
-      email,
+      email: process.env.ADMIN_EMAIL,
       otp,
-      expiresAt: new Date(Date.now() + 2 * 60 * 1000), // 2 minutes
+      expiresAt: new Date(Date.now() + 2 * 60 * 1000),
     });
 
-    return res.json({ success: true, message: "OTP sent successfully" });
+    return res.json({
+      success: true,
+      message: "Admin OTP sent",
+    });
   } catch (err) {
     console.error("ADMIN OTP SEND ERROR:", err);
-    return res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
