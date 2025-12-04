@@ -1,101 +1,41 @@
 import express from "express";
 import Otp from "../model/Otp.js";
 import otpGenerator from "otp-generator";
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import { Resend } from "resend";
 dotenv.config();
 import User from "../model/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// ---------------------- SEND USER OTP ----------------------
 export const sendOtp = async (req, res) => {
   try {
     const { email } = req.body;
+
     const otp = otpGenerator.generate(6, {
       upperCase: false,
       specialChars: false,
     });
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: process.env.SMTP_EMAIL,
+    // SEND EMAIL USING RESEND
+    await resend.emails.send({
+      from: process.env.FROM_EMAIL,
       to: email,
-      subject:
-        "Your OTP Verification – Thirukkalyanam Matrimony Service Centre",
+      subject: "Your OTP Verification – Thirukkalyanam Matrimony",
       html: `
-  <div style="font-family: Arial, sans-serif; padding: 25px; background: #f8f2f7; border-radius: 10px;">
-    
-    <div style="text-align: center; margin-bottom: 20px;">
-      <h2 style="color: #C2185B; margin-bottom: 5px;">Thirukkalyanam Matrimony Service Centre</h2>
-      <p style="color: #555; font-size: 14px;">
-        Trusted Matrimonial Service for Over 30 Years
-      </p>
-    </div>
-
-    <p style="font-size: 15px; color: #333;">
-      Dear User,<br><br>
-      Thank you for choosing our Matrimony Service. Your OTP for account verification is:
-    </p>
-
-    <div style="text-align: center; margin: 25px 0;">
-      <h1 style="
-        background: #C2185B; 
-        color: white;
-        display: inline-block;
-        padding: 12px 30px;
-        border-radius: 8px;
-        letter-spacing: 4px;
-      ">
-        ${otp}
-      </h1>
-    </div>
-
-    <p style="font-size: 15px; color: #555; line-height: 24px;">
-      Please enter this OTP in your app to complete your verification.
-      This OTP is valid for <strong>2 minutes</strong>.
-    </p>
-
-    <hr style="margin: 25px 0; border-top: 1px solid #ddd;" />
-
-    <h3 style="color: #C2185B; margin-bottom: 8px;">About Our Service</h3>
-
-    <p style="font-size: 14px; color: #444; line-height: 22px;">
-      Our service has been helping all communities for over 30 years, arranging suitable matches exactly as you expect.<br>
-      Through our Thirukkalyanam Matrimony Centre, we have arranged many successful marriages. You can choose your preferred match from our available profiles.
-    </p>
-
-    <h4 style="color: #C2185B; margin-top: 15px;">Special Features</h4>
-    <ul style="color: #444; font-size: 14px; line-height: 22px;">
-      <li>Profiles from Doctors, Engineers, Business Owners</li>
-      <li>Government & Private Employees</li>
-      <li>Bank Staff, IT Professionals & More</li>
-      <li>Second Marriage profiles arranged with care</li>
-    </ul>
-
-    <h4 style="color: #C2185B; margin-top: 15px;">Service Charges</h4>
-    <p style="font-size: 14px; color: #444;">
-      ₹50/- per Horoscope / Biodata you choose.
-    </p>
-
-    <p style="margin-top: 25px; font-size: 13px; color: #888; text-align: center;">
-      Thank you for trusting Thirukkalyanam Matrimony Service Centre.
-    </p>
-
-  </div>
-  `,
+        <h2>Your Verification OTP</h2>
+        <h1>${otp}</h1>
+        <p>Valid for 2 minutes.</p>
+      `,
     });
 
     await Otp.create({
       email,
       otp,
-      expiresAt: new Date(Date.now() + 2 * 60 * 1000), // 2 min expiry
+      expiresAt: new Date(Date.now() + 2 * 60 * 1000),
     });
 
     res.json({ success: true, message: "OTP sent successfully" });
@@ -105,14 +45,13 @@ export const sendOtp = async (req, res) => {
   }
 };
 
+// ---------------------- VERIFY USER OTP ----------------------
 export const verifyOtp = async (req, res) => {
   try {
     const { name, email, password, role, otp, profilePic } = req.body;
 
     if (!name || !email || !password || !role || !otp) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing fields" });
+      return res.status(400).json({ success: false, message: "Missing fields" });
     }
 
     const validOtp = await Otp.findOne({ email, otp: String(otp) });
@@ -144,96 +83,51 @@ export const verifyOtp = async (req, res) => {
   }
 };
 
+// ---------------------- SEND ADMIN OTP ----------------------
 export const adminSendOtp = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // 1. Validate admin credentials FIRST
     if (
       email !== process.env.ADMIN_EMAIL ||
       password !== process.env.ADMIN_PASSWORD
     ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid admin credentials",
-      });
+      return res.status(400).json({ success: false, message: "Invalid admin credentials" });
     }
 
-    // 2. Generate OTP
     const otp = otpGenerator.generate(6, {
       upperCase: false,
       specialChars: false,
     });
 
-    // 3. Setup Gmail SMTP
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    // 4. Send OTP Email
-    await transporter.sendMail({
-      from: process.env.SMTP_EMAIL,
-      to: process.env.ADMIN_EMAIL, // ALWAYS send to admin email
+    await resend.emails.send({
+      from: process.env.FROM_EMAIL,
+      to: process.env.ADMIN_EMAIL,
       subject: "Your Admin Login OTP",
-      html: `<h1>${otp}</h1><p>Valid for 2 minutes.</p>`,
+      html: `
+        <h2>Admin Login OTP</h2>
+        <h1>${otp}</h1>
+        <p>Valid for 2 minutes.</p>
+      `,
     });
 
-    // 5. Save OTP
     await Otp.create({
       email: process.env.ADMIN_EMAIL,
       otp,
       expiresAt: new Date(Date.now() + 2 * 60 * 1000),
     });
 
-    return res.json({
-      success: true,
-      message: "Admin OTP sent",
-    });
+    return res.json({ success: true, message: "Admin OTP sent" });
   } catch (err) {
     console.error("ADMIN OTP SEND ERROR:", err);
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-export const testEmail = async (req, res) => {
-  try {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: process.env.SMTP_EMAIL,
-      to: process.env.SMTP_EMAIL,
-      subject: "SMTP Test",
-      text: "SMTP connection working!",
-    });
-
-    res.send("Email Sent!");
-  } catch (err) {
-    res.send(err.message);
-  }
-};
-
+// ---------------------- VERIFY ADMIN OTP ----------------------
 export const adminVerifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
-
-    if (!email || !otp) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing fields" });
-    }
 
     const validOtp = await Otp.findOne({ email, otp });
 
@@ -247,7 +141,6 @@ export const adminVerifyOtp = async (req, res) => {
 
     await Otp.deleteMany({ email });
 
-    // Generate JWT for admin
     const token = jwt.sign({ role: "admin", email }, process.env.JWT_SECRET, {
       expiresIn: "1d",
     });
@@ -260,5 +153,21 @@ export const adminVerifyOtp = async (req, res) => {
   } catch (err) {
     console.error("ADMIN OTP VERIFY ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ---------------------- TEST EMAIL ENDPOINT ----------------------
+export const testEmail = async (req, res) => {
+  try {
+    await resend.emails.send({
+      from: process.env.FROM_EMAIL,
+      to: process.env.FROM_EMAIL,
+      subject: "Test Email",
+      text: "Resend email API works perfectly!",
+    });
+
+    res.send("Email sent successfully!");
+  } catch (err) {
+    res.status(500).send(err.message);
   }
 };
