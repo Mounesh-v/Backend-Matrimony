@@ -1,7 +1,7 @@
 import express from "express";
 import auth from "../middleWare/authMiddleware.js";
 import adminAuth from "../middleWare/adminAuth.js";
-import upload from "../middleware/multer.js";
+import upload from "../middleWare/multer.js";
 
 import {
   registerGroom,
